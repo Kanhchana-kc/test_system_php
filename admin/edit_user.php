@@ -1,6 +1,6 @@
 <?php
 require '../config/db_conn.php';
-include '../includes/admin_header.php';
+include '../admin/admin_header.php';
 
 $id = intval($_GET['id']);
 $userQuery = $conn->query("SELECT * FROM users WHERE id=$id");

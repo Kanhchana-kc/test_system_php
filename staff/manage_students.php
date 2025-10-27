@@ -1,63 +1,106 @@
 <?php
 require '../config/db_conn.php';
-include __DIR__ . '/staff_header.php';
+include 'staff_header.php';
 
-$staffId = intval($_SESSION['user_id']);
-$search = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
+$staff_id = $_SESSION['user_id'];
 
-$query = "SELECT * FROM people WHERE created_by=$staffId
-          AND (first_name LIKE '%$search%' OR last_name LIKE '%$search%')
-          ORDER BY id DESC";
-$result = $conn->query($query);
+// Handle deletion
+if (isset($_GET['delete'])) {
+    $delete_id = intval($_GET['delete']);
+
+    // Only allow deleting students created by this staff
+    $stmt = $conn->prepare("DELETE FROM people WHERE id = ? AND created_by = ?");
+    $stmt->bind_param("ii", $delete_id, $staff_id);
+    if ($stmt->execute()) {
+        echo "<div class='alert alert-success mt-3'>Student deleted successfully.</div>";
+    } else {
+        echo "<div class='alert alert-danger mt-3'>Error deleting student: ".$stmt->error."</div>";
+    }
+    $stmt->close();
+}
+
+// Handle search
+$search = '';
+if (isset($_GET['search'])) {
+    $search = $conn->real_escape_string($_GET['search']);
+}
+
+// Fetch students for this staff
+$sql = "SELECT * FROM people WHERE created_by = ?";
+$params = [$staff_id];
+$types = "i";
+
+if ($search !== '') {
+    $sql .= " AND (first_name LIKE ? OR last_name LIKE ? OR grade LIKE ?)";
+    $search_param = "%$search%";
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $types .= "sss";
+}
+
+$stmt = $conn->prepare($sql);
+$stmt->bind_param($types, ...$params);
+$stmt->execute();
+$result = $stmt->get_result();
+$students = $result->fetch_all(MYSQLI_ASSOC);
+$stmt->close();
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2>My Students</h2>
-  <a href="add_student.php" class="btn btn-primary">Add Student</a>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Manage Students</h3>
+        <a href="add_student.php" class="btn btn-success"><i class="bi bi-plus-circle"></i> Add Student</a>
+    </div>
+
+    <!-- Search Form -->
+    <form method="get" class="mb-3">
+        <div class="input-group">
+            <input type="text" name="search" class="form-control" placeholder="Search by name or grade" value="<?= htmlspecialchars($search) ?>">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Search</button>
+        </div>
+    </form>
+
+    <table class="table table-hover table-bordered align-middle text-center">
+        <thead class="table-dark">
+            <tr>
+                <th>Image</th>
+                <th>Name</th>
+                <th>Grade</th>
+                <th>Role</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (count($students) > 0): ?>
+                <?php foreach ($students as $s): ?>
+                    <tr onclick="window.location='view_student.php?id=<?= $s['id'] ?>'" style="cursor:pointer;">
+                        <td>
+                            <?php
+                            $img = "../uploads/" . ($s['image'] ?? '');
+                            if (!empty($s['image']) && file_exists($img)) {
+                                echo '<img src="' . htmlspecialchars($img) . '" class="rounded-circle" width="50" height="50">';
+                            } else {
+                                echo '<img src="../uploads/default.png" class="rounded-circle" width="50" height="50">';
+                            }
+                            ?>
+                        </td>
+                        <td><?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?></td>
+                        <td><span class="badge bg-success"><?= htmlspecialchars($s['grade']) ?></span></td>
+                        <td><span class="badge bg-info"><?= htmlspecialchars($s['role']) ?></span></td>
+                        <td>
+                            <a href="edit_student.php?id=<?= $s['id'] ?>" class="btn btn-primary btn-sm"><i class="bi bi-pencil"></i></a>
+                            <a href="manage_students.php?delete=<?= $s['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this student?');"><i class="bi bi-trash"></i></a>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <tr>
+                    <td colspan="5">No students found.</td>
+                </tr>
+            <?php endif; ?>
+        </tbody>
+    </table>
 </div>
 
-<form method="GET" class="mb-3">
-  <div class="input-group">
-    <input type="text" name="search" class="form-control" placeholder="Search students..." value="<?= htmlspecialchars($search) ?>">
-    <button class="btn btn-secondary" type="submit">Search</button>
-  </div>
-</form>
-
-<table class="table table-bordered table-hover text-center align-middle">
-  <thead class="table-dark">
-    <tr>
-      <th>Image</th>
-      <th>First Name</th>
-      <th>Last Name</th>
-      <th>Grade</th>
-      <th>Action</th>
-    </tr>
-  </thead>
-  <tbody>
-    <?php if ($result && $result->num_rows > 0): ?>
-      <?php while($student = $result->fetch_assoc()): ?>
-        <tr>
-          <td>
-            <?php if (!empty($student['image'])): ?>
-              <img src="../uploads/<?= htmlspecialchars($student['image']) ?>" width="50" height="50">
-            <?php else: ?>
-              No Image
-            <?php endif; ?>
-          </td>
-          <td><a href="view_student.php?id=<?= $student['id'] ?>"><?= htmlspecialchars($student['first_name']) ?></a></td>
-          <td><?= htmlspecialchars($student['last_name']) ?></td>
-          <td><?= htmlspecialchars($student['grade']) ?></td>
-          <td>
-            <a href="edit_student.php?id=<?= $student['id'] ?>" class="btn btn-sm btn-warning">Edit</a>
-            <a href="delete_student.php?id=<?= $student['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete this student?')">Delete</a>
-          </td>
-        </tr>
-      <?php endwhile; ?>
-    <?php else: ?>
-      <tr><td colspan="5">No students found.</td></tr>
-    <?php endif; ?>
-  </tbody>
-</table>
-
-</div></div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

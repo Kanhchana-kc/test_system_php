@@ -1,6 +1,6 @@
 <?php
 require '../config/db_conn.php';
-include '../includes/admin_header.php';
+include '../admin/admin_header.php';
 $message = '';
 
 if (isset($_POST['save'])) {
