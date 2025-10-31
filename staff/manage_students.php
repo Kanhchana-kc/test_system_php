@@ -11,7 +11,8 @@ if (!$staff_id) {
 // Handle deletion
 if (isset($_GET['delete'])) {
     $delete_id = intval($_GET['delete']);
-    $stmt = $conn->prepare("DELETE FROM students WHERE id = ? AND created_by = ?");
+    $stmt = $conn->prepare("DELETE FROM students WHERE id = ? AND
+     created_by = ?");
     $stmt->bind_param("ii", $delete_id, $staff_id);
     if ($stmt->execute()) {
         echo "<div class='alert alert-success mt-3'>Student deleted successfully.</div>";
@@ -36,7 +37,7 @@ if ($search !== '') {
     $params[] = $search_param;
 }
 
-$sql .= " ORDER BY id DESC";
+$sql .= " ORDER BY id ASC";
 
 $stmt = $conn->prepare($sql);
 
